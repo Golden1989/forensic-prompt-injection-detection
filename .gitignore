@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# Dados gerados (embeddings, modelos, CSVs) - regeneraveis pelos scripts
+data/
