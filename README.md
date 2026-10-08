@@ -46,10 +46,15 @@ Os conjuntos de calibração (60%) e teste (40%) não compartilham nenhum exempl
 
 ## Como executar
 
-**Requisitos:** Python 3.10+ e, para a etapa 4, [Ollama](https://ollama.com/) com o modelo `mistral:7b` (`ollama pull mistral:7b`).
+**Requisitos:** Python 3.11 (testado; 3.10+ deve funcionar) e, para a etapa 4, [Ollama](https://ollama.com/) com o modelo `mistral:7b` (`ollama pull mistral:7b`).
+
+As versões exatas usadas estão em [`requirements.txt`](requirements.txt). Fixar as versões importa principalmente para o `scikit-learn`: os modelos salvos com `joblib` podem não carregar em outra versão.
 
 ```bash
-pip install datasets pandas numpy scikit-learn sentence-transformers joblib requests
+# opcional: PyTorch só com CPU (mais leve)
+pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu
+
+pip install -r requirements.txt
 ```
 
 Rode os scripts **a partir da raiz do repositório**, na ordem:
@@ -70,3 +75,12 @@ Os dados gerados (CSVs, embeddings `.npy` e modelos `.joblib`) ficam em `data/`.
 - [ ] Completar o teste ponta a ponta com uma LLM local
 - [ ] Gerar o registro forense dos prompts bloqueados
 - [ ] Incluir exemplos reais de datasets públicos de prompt injection
+
+## Créditos e licenças
+
+- **Dados legítimos:** [Stanford Alpaca](https://github.com/tatsu-lab/stanford_alpaca) (Taori et al., 2023), obtido via [Hugging Face](https://huggingface.co/datasets/tatsu-lab/alpaca), licença [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/): **somente uso não comercial**. O dataset não é redistribuído neste repositório; ele é baixado pelo `Datasetbase.py`.
+- **Modelo de embeddings:** [`sentence-transformers/all-MiniLM-L6-v2`](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2), licença Apache 2.0.
+- **Geração de dados sintéticos:** [Mistral 7B](https://mistral.ai/) via [Ollama](https://ollama.com/), licença Apache 2.0.
+- **Taxonomia de ataques:** [OWASP Top 10 for LLM Applications, LLM01: Prompt Injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/).
+
+O **código** deste repositório está sob a licença [MIT](LICENSE). A licença MIT vale só para o código: os dados gerados a partir do Alpaca continuam sujeitos à CC BY-NC 4.0.

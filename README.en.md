@@ -48,10 +48,15 @@ The calibration (60%) and test (40%) sets share no examples, to avoid data leaka
 
 ## Running it
 
-**Requirements:** Python 3.10+ and, for stage 4, [Ollama](https://ollama.com/) with the `mistral:7b` model (`ollama pull mistral:7b`).
+**Requirements:** Python 3.11 (tested; 3.10+ should work) and, for stage 4, [Ollama](https://ollama.com/) with the `mistral:7b` model (`ollama pull mistral:7b`).
+
+The exact versions used are pinned in [`requirements.txt`](requirements.txt). Pinning matters most for `scikit-learn`: models saved with `joblib` may not load under a different version.
 
 ```bash
-pip install datasets pandas numpy scikit-learn sentence-transformers joblib requests
+# optional: CPU-only PyTorch (lighter)
+pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu
+
+pip install -r requirements.txt
 ```
 
 Run the scripts **from the repository root**, in order:
@@ -72,3 +77,12 @@ Generated data (CSVs, `.npy` embeddings and `.joblib` models) goes into `data/`.
 - [ ] Complete the end-to-end test with a local LLM
 - [ ] Produce the forensic log of blocked prompts
 - [ ] Add real examples from public prompt injection datasets
+
+## Credits and licenses
+
+- **Legitimate prompts:** [Stanford Alpaca](https://github.com/tatsu-lab/stanford_alpaca) (Taori et al., 2023), via [Hugging Face](https://huggingface.co/datasets/tatsu-lab/alpaca), licensed [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/): **non-commercial use only**. The dataset is not redistributed here; `Datasetbase.py` downloads it.
+- **Embedding model:** [`sentence-transformers/all-MiniLM-L6-v2`](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2), Apache 2.0.
+- **Synthetic data generation:** [Mistral 7B](https://mistral.ai/) via [Ollama](https://ollama.com/), Apache 2.0.
+- **Attack taxonomy:** [OWASP Top 10 for LLM Applications, LLM01: Prompt Injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/).
+
+The **code** in this repository is released under the [MIT License](LICENSE). The MIT License covers only the code: data derived from Alpaca remains subject to CC BY-NC 4.0.

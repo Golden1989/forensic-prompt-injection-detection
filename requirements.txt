@@ -1,0 +1,11 @@
+# Testado com Python 3.11
+# Para instalar o PyTorch só com CPU (mais leve), rode antes:
+#   pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu
+datasets==5.0.1
+joblib==1.5.3
+numpy==2.4.6
+pandas==3.0.5
+requests==2.34.2
+scikit-learn==1.9.0
+sentence-transformers==6.0.1
+torch==2.13.0
