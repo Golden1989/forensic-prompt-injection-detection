@@ -3,6 +3,7 @@
 #   pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu
 datasets==5.0.1
 joblib==1.5.3
+matplotlib==3.11.0
 numpy==2.4.6
 pandas==3.0.5
 requests==2.34.2

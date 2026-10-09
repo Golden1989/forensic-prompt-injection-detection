@@ -1,0 +1,88 @@
+{
+  "recall_alvo": 0.95,
+  "modelo_escolhido": "OneClassSVM",
+  "pr_auc_calibracao": {
+    "IsolationForest": 0.03737854829439961,
+    "OneClassSVM": 0.08747616782964991
+  },
+  "limiares": {
+    "IsolationForest": -0.03328339652740736,
+    "OneClassSVM": -1.7879903314475882
+  },
+  "teste": {
+    "IsolationForest": {
+      "recall": 0.9375,
+      "precisao": 0.03456221198156682,
+      "f1": 0.06666666666666667,
+      "taxa_falso_positivo": 0.9062725306416727,
+      "pr_auc": 0.0417675218771032,
+      "roc_auc": 0.5760067024486635,
+      "matriz": {
+        "VN": 390,
+        "FP": 3771,
+        "FN": 9,
+        "VP": 135
+      }
+    },
+    "OneClassSVM": {
+      "recall": 0.9652777777777778,
+      "precisao": 0.036636794939377965,
+      "f1": 0.07059421025901473,
+      "taxa_falso_positivo": 0.878394616678683,
+      "pr_auc": 0.1251050812274004,
+      "roc_auc": 0.724325082111672,
+      "matriz": {
+        "VN": 506,
+        "FP": 3655,
+        "FN": 5,
+        "VP": 139
+      }
+    }
+  },
+  "teste_por_tecnica": [
+    {
+      "grupo": "encoding",
+      "total": 16,
+      "bloqueados": 16,
+      "recall": 1.0
+    },
+    {
+      "grupo": "hidden instruction",
+      "total": 32,
+      "bloqueados": 29,
+      "recall": 0.90625
+    },
+    {
+      "grupo": "indirect injection",
+      "total": 32,
+      "bloqueados": 30,
+      "recall": 0.9375
+    },
+    {
+      "grupo": "payload splitting",
+      "total": 32,
+      "bloqueados": 32,
+      "recall": 1.0
+    },
+    {
+      "grupo": "role-play override",
+      "total": 32,
+      "bloqueados": 32,
+      "recall": 1.0
+    }
+  ],
+  "teste_por_marcador": [
+    {
+      "grupo": "com marcador",
+      "total": 52,
+      "bloqueados": 48,
+      "recall": 0.9230769230769231
+    },
+    {
+      "grupo": "naturalizado",
+      "total": 12,
+      "bloqueados": 11,
+      "recall": 0.9166666666666666
+    }
+  ]
+}

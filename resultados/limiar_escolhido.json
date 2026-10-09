@@ -1,0 +1,6 @@
+{
+  "modelo": "OneClassSVM",
+  "arquivo_modelo": "data/modelo_ocsvm.joblib",
+  "limiar": -1.7879903314475882,
+  "recall_alvo": 0.95
+}
