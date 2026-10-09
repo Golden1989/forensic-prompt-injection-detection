@@ -27,6 +27,9 @@ from sklearn.model_selection import train_test_split
 
 ARQUIVO_MALICIOSOS = "data/prompts_maliciosos.csv"
 ARQUIVO_REVISAO = "revisao_manual.csv"
+# Todo candidato gerado (aceito ou não, com o motivo), gravado na hora:
+# permite acompanhar a qualidade durante a geração e auditar depois.
+ARQUIVO_LOG = "data/log_geracao.csv"
 
 # Meta de exemplos por semente. Técnicas com mais sementes recebem mais
 # exemplos, proporcionalmente.
@@ -155,6 +158,57 @@ PADROES_META = [
     r"\bprompt injection\b",
 ]
 
+# Mais de uma variação na mesma resposta (Diário de Bancada, tentativa 04):
+# lista numerada ou "Option 2" / "Alternatively" no começo de uma linha.
+PADRAO_VARIAS_OPCOES = r"(?im)^\s*(\d+[.)]\s|option\s*\d|alternatively\b|or\s*$)"
+
+# Técnicas cujo prompt é um parágrafo só (ver motivo_rejeicao).
+TECNICAS_UM_PARAGRAFO = ("role-play override", "payload splitting", "encoding (payload)", "encoding")
+
+# Role-play em que quem fala é a própria "IA" ("Imagine I'm a digital
+# entity...", "I will only output the word: CONFIRMED") em vez do atacante
+# dando a ordem — o ataque perde o sentido.
+PADRAO_PERSPECTIVA_INVERTIDA = r"\b(imagine I'?m|I will (now )?(only|solely|respond|output))\b"
+
+# O Mistral respondendo ao próprio prompt (visto no piloto de 09/10):
+# uma linha só com a palavra-canário, ou o começo de uma "resposta".
+PADROES_AUTORRESPOSTA = [
+    r"(?m)^\s*\W*(CONFIRMED|ACKNOWLEDGED|VERIFIED|APPROVED)\W*\s*$",
+    r"\bhere('s| is) (the|my) (translation|summary|analysis|response|answer)\b",
+    r"\bif you need (a|the) (translation|summary)\b",
+]
+
+# O Mistral explicando o ataque em vez de escrevê-lo (piloto de 09/10:
+# "the actual purpose is to respond with CONFIRMED").
+PADROES_EXPLICACAO = [
+    r"\bthe (real|actual|true) (goal|purpose|intent)\b",
+    r"\bthe model should\b",
+    # Nomear a técnica dentro do próprio ataque ("an interesting hidden
+    # instruction", "[HIDDEN INSTRUCTION: ...]") — um atacante real não faz isso.
+    r"\bhidden (instruction|message|command)s?\b",
+    # Variações do mesmo vício vistas na geração de 09/10: "but hidden within
+    # it is the instruction", "I've subtly hidden an instruction within the
+    # text", "the malicious instruction is hidden within...".
+    r"\bhidden (with)?in\b",
+    r"\bhidden an? (instruction|request|message|command)\b",
+    r"\b(malicious|injected) (instruction|command|request|prompt)\b",
+    r"\bin this (variation|example|prompt)\b",
+]
+
+# Mais respostas do próprio modelo: tradução da frase que ele mesmo gerou
+# ("(The French sentence translates to: ...)") e variações grudadas
+# ("Here's another one:").
+PADROES_AUTORRESPOSTA += [
+    r"\btranslates to\b",
+    r"(?m)^\s*\((the |be careful|translation)",
+    r"\bhere('s| is) another\b",
+]
+
+# Preâmbulo numa linha própria antes do prompt ("Here's an example:",
+# "Here's the email content with the requested variation:"). É cortado
+# em vez de descartar o exemplo, porque o ataque depois dele costuma ser bom.
+PADRAO_PREAMBULO = r"^\s*here('s| is)\b[^\n]*:\s*\n"
+
 _modelo_embedding = None
 
 
@@ -232,21 +286,45 @@ def limpar_texto(texto: str) -> str:
 
 
 def limpar_saida(texto: str) -> str:
-    """Remove aspas que o Mistral costuma colocar em volta da resposta
-    inteira (elas não fazem parte do prompt)."""
-    texto = texto.strip()
+    """Remove o preâmbulo e as aspas que o Mistral costuma colocar em volta
+    da resposta inteira (eles não fazem parte do prompt)."""
+    texto = re.sub(PADRAO_PREAMBULO, "", texto.strip(), flags=re.IGNORECASE).strip()
     if len(texto) >= 2 and texto[0] == texto[-1] and texto[0] in "\"'":
         texto = texto[1:-1].strip()
     return texto
 
 
-def motivo_rejeicao(texto: str) -> str | None:
+def motivo_rejeicao(texto: str, tecnica: str | None = None) -> str | None:
     """Filtro automático de qualidade. Retorna o motivo da rejeição, ou None
     se o texto passou."""
     if len(texto) < 30:
         return "curto demais"
     if "�" in texto:
         return "caractere corrompido"
+    # O Alpaca (lado normal) é 100% em inglês: um malicioso em outro idioma
+    # deixaria o detector aprender "idioma" em vez de "ataque" (Diário de
+    # Bancada, tentativa 04). Letras acentuadas são um sinal barato disso.
+    letras = [c for c in texto if c.isalpha()]
+    if letras and sum(not c.isascii() for c in letras) / len(letras) > 0.02:
+        return "fora do inglês"
+    if re.search(PADRAO_VARIAS_OPCOES, texto):
+        return "mais de uma variação"
+    if any(re.search(p, texto, re.IGNORECASE) for p in PADROES_AUTORRESPOSTA):
+        return "respondeu ao próprio prompt"
+    if any(re.search(p, texto, re.IGNORECASE) for p in PADROES_EXPLICACAO):
+        return "explicou o ataque"
+    # As sementes têm 1 parágrafo; 4 ou mais blocos separados por linha em
+    # branco foram, no piloto, o modelo divagando. (3 não: um e-mail com
+    # assunto, corpo e assinatura é um indirect injection legítimo.)
+    n_paragrafos = len([b for b in re.split(r"\n\s*\n", texto) if b.strip()])
+    if n_paragrafos >= 4:
+        return "longo demais (4+ parágrafos)"
+    # Fora de hidden/indirect (que embutem um texto ou e-mail), um 2º
+    # parágrafo foi, na geração de 09/10, sempre uma 2ª variação grudada.
+    if tecnica in TECNICAS_UM_PARAGRAFO and n_paragrafos >= 2:
+        return "mais de uma variação"
+    if tecnica == "role-play override" and re.search(PADRAO_PERSPECTIVA_INVERTIDA, texto, re.IGNORECASE):
+        return "perspectiva invertida"
     for padrao in PADROES_META:
         if re.search(padrao, texto, re.IGNORECASE):
             return f"texto meta ({padrao})"
@@ -322,7 +400,7 @@ def filtrar_existentes(df: pd.DataFrame, dedup_texto: Deduplicador, dedup_payloa
         texto = linha["text"]
         if linha["tecnica"] == "encoding":
             payload = extrair_payload(texto)
-            if payload is None or motivo_rejeicao(payload):
+            if payload is None or motivo_rejeicao(payload, "encoding"):
                 motivo = "payload inválido"
             else:
                 # o mesmo payload aparece 2 vezes (base64 e ROT13): decide uma vez só
@@ -330,7 +408,7 @@ def filtrar_existentes(df: pd.DataFrame, dedup_texto: Deduplicador, dedup_payloa
                     payloads_vistos[payload] = dedup_payload.aceitar(payload)
                 motivo = None if payloads_vistos[payload] else "duplicata"
         else:
-            motivo = motivo_rejeicao(texto) or (None if dedup_texto.aceitar(texto) else "duplicata")
+            motivo = motivo_rejeicao(texto, linha["tecnica"]) or (None if dedup_texto.aceitar(texto) else "duplicata")
 
         if motivo is None:
             manter.append(True)
@@ -340,6 +418,21 @@ def filtrar_existentes(df: pd.DataFrame, dedup_texto: Deduplicador, dedup_payloa
 
     print(f"Filtros nos existentes: {len(df) - sum(manter)} descartados {descartes}")
     return df[manter].reset_index(drop=True)
+
+
+def registrar_log(tecnica: str, texto: str, resultado: str) -> None:
+    """Acrescenta um candidato ao log de geração."""
+    novo = not os.path.exists(ARQUIVO_LOG)
+    pd.DataFrame([{"tecnica": tecnica, "resultado": resultado, "text": texto}]).to_csv(
+        ARQUIVO_LOG, mode="a", header=novo, index=False
+    )
+
+
+def avaliar_candidato(texto: str, tecnica: str, dedup: Deduplicador) -> str:
+    """Aplica filtros e deduplicação; registra no log. Retorna "aceito" ou o motivo."""
+    resultado = motivo_rejeicao(texto, tecnica) or ("aceito" if dedup.aceitar(texto) else "duplicata")
+    registrar_log(tecnica, texto, resultado)
+    return resultado
 
 
 def gerar_faltantes(df: pd.DataFrame, dedup_texto: Deduplicador, dedup_payload: Deduplicador) -> pd.DataFrame:
@@ -361,7 +454,7 @@ def gerar_faltantes(df: pd.DataFrame, dedup_texto: Deduplicador, dedup_payload: 
             semente = sementes[tentativas % len(sementes)]
             candidata = limpar_saida(gerar_variacao(semente, tecnica))
             tentativas += 1
-            if motivo_rejeicao(candidata) or not dedup_texto.aceitar(candidata):
+            if avaliar_candidato(candidata, tecnica, dedup_texto) != "aceito":
                 continue
             registros.append({"text": candidata, "label": 1, "origem": "sintetico", "tecnica": tecnica})
             aceitas += 1
@@ -377,7 +470,7 @@ def gerar_faltantes(df: pd.DataFrame, dedup_texto: Deduplicador, dedup_payload: 
         while aceitas < faltam and tentativas < max_tentativas:
             payload = limpar_saida(gerar_variacao(PAYLOAD_BASE, "instruction override phrase"))
             tentativas += 1
-            if motivo_rejeicao(payload) or not dedup_payload.aceitar(payload):
+            if avaliar_candidato(payload, "encoding (payload)", dedup_payload) != "aceito":
                 continue
             for metodo in ("base64", "rot13"):
                 registros.append(
