@@ -71,24 +71,33 @@ def embeddings(nome: str) -> tuple[np.ndarray, np.ndarray]:
     return emb_n, emb_m
 
 
-def montar_treino_e_calibracao(emb_n: np.ndarray, emb_m: np.ndarray):
+def indices_divisao() -> dict[str, np.ndarray]:
     """Refaz exatamente as divisões do pipeline (mesmos random_state), para
     que treino e calibração tenham os MESMOS prompts em qualquer modelo de
     embedding:
       - ModeloDeteccaoAnomalias.py: normais 80% treino / 20% validação
       - aumentodedados.py: validação 60% calibração / 40% teste;
         maliciosos 60/40 estratificado por técnica
-    Devolve só treino e calibração; a parte de teste é descartada aqui.
+    Devolve índices nas linhas de prompts_normais.csv e prompts_maliciosos.csv,
+    só de treino e calibração; a parte de teste é descartada aqui.
     """
-    idx_treino, idx_val = train_test_split(np.arange(len(emb_n)), test_size=0.2, random_state=42)
-    idx_val_calib, _ = train_test_split(np.arange(len(idx_val)), test_size=0.4, random_state=42)
-
+    n_normais = len(pd.read_csv("data/prompts_normais.csv"))
     tecnicas = pd.read_csv("data/prompts_maliciosos.csv")["tecnica"]
-    idx_mal_calib, _ = train_test_split(np.arange(len(emb_m)), test_size=0.4, random_state=42, stratify=tecnicas)
+    idx_treino, idx_val = train_test_split(np.arange(n_normais), test_size=0.2, random_state=42)
+    idx_val_calib, _ = train_test_split(np.arange(len(idx_val)), test_size=0.4, random_state=42)
+    idx_mal_calib, _ = train_test_split(np.arange(len(tecnicas)), test_size=0.4, random_state=42, stratify=tecnicas)
+    return {"treino": idx_treino, "normais_calib": idx_val[idx_val_calib], "maliciosos_calib": idx_mal_calib}
 
-    X_treino = emb_n[idx_treino]
-    X_calib = np.vstack([emb_n[idx_val][idx_val_calib], emb_m[idx_mal_calib]])
-    y_calib = np.concatenate([np.zeros(len(idx_val_calib), dtype=int), np.ones(len(idx_mal_calib), dtype=int)])
+
+def montar_treino_e_calibracao(emb_n: np.ndarray, emb_m: np.ndarray):
+    """Treino (só normais) e calibração (normais + maliciosos), a partir dos
+    embeddings de todos os prompts. Ver indices_divisao()."""
+    idx = indices_divisao()
+    X_treino = emb_n[idx["treino"]]
+    X_calib = np.vstack([emb_n[idx["normais_calib"]], emb_m[idx["maliciosos_calib"]]])
+    y_calib = np.concatenate(
+        [np.zeros(len(idx["normais_calib"]), dtype=int), np.ones(len(idx["maliciosos_calib"]), dtype=int)]
+    )
     return X_treino, X_calib, y_calib
 
 
